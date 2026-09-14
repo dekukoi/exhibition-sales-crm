@@ -1,0 +1,5 @@
+entry_id;company_code;opportunity_code;activity_type;occurred_at;details;follow_up_on;completion_marker;legacy_author
+A001;C001;OPP001;call;01/02/2026 10:30;Discussed stand requirements;08/02/2026;N;mrossi
+A002;C001;;note;02/02/2026 09:00;General note about company;;;mrossi
+A003;C002;OPP002;task;05/01/2026 11:00;Follow up on budget;10/01/2026;N;pneri
+A004;C001;OPP001;email;03/02/2026 14:15;Confirmed area;;Y;mrossi

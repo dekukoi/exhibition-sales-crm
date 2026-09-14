@@ -1,0 +1,3 @@
+opportunity_code;company_code;contact_code;description;amount_eur;legacy_status;opened_on;expected_close_on;historical_campaign_code;fair_edition_code;stand_area_sqm;client_budget_eur;requested_height_m;brief_notes
+OPP001;C001;CT001;Custom stand;15000,00; Open ;01/02/2026;15/03/2026;CAMP01;FE001;24,50;16000,00;7,00;Height exceeds edition max on purpose
+OPP002;C002;;Small stand;;open;05/01/2026;;;FE001;;;;Missing most fields

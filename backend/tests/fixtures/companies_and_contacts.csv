@@ -1,0 +1,4 @@
+legacy_row_id;company_code;company_name;province_code;region;sales_rep;contact_code;contact_first_name;contact_last_name;email;phone;fax;legacy_print_layout
+1;C001;Acme Stands Srl;MI;Lombardia;Giulia Bianchi;CT001;Marco;Rossi;marco.rossi@example.com;+39021234567;;LEGACY_A
+2;C001;Acme Stands Srl;MI;Lombardia;Giulia Bianchi;CT002;Elena;Verdi;elena.verdi@example.com;;;LEGACY_A
+3;C002;Bright Exhibits Srl;RM;Lazio;Paolo Neri;CT003;Luca;Gialli;;+39064445566;;LEGACY_B

@@ -3,6 +3,11 @@
 .env.*
 !.env.example
 
+# Vendored Claude Code skill packages (npx skills add mattpocock/skills) —
+# tooling used to build this, not part of the deliverable.
+.claude/
+skills-lock.json
+
 # Build output (adjust for your stack).
 node_modules/
 .next/

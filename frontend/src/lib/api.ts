@@ -43,6 +43,25 @@ export interface OpportunitySummary {
   fair_edition: FairEditionSummary;
 }
 
+export interface OpportunityUpdatePayload {
+  status?: string | null;
+  amount_eur?: string | null;
+  opened_on?: string | null;
+  expected_close_on?: string | null;
+  stand_area_sqm?: string | null;
+  client_budget_eur?: string | null;
+  requested_height_m?: string | null;
+  brief_notes?: string | null;
+}
+
+export type ActivityType = "call" | "email" | "meeting" | "note" | "task";
+
+export interface ActivityCreatePayload {
+  activity_type: ActivityType;
+  details?: string | null;
+  follow_up_on?: string | null;
+}
+
 export interface CompanyDetail {
   id: number;
   company_code: string;
@@ -107,6 +126,32 @@ export function getCompanyActivity(id: number): Promise<ActivityEntry[]> {
 
 export function getOpportunityActivity(id: number): Promise<ActivityEntry[]> {
   return apiFetch(`/api/opportunities/${id}/activity`);
+}
+
+export function listOpportunityStatuses(): Promise<string[]> {
+  return apiFetch("/api/opportunities/statuses");
+}
+
+export function updateOpportunity(
+  id: number,
+  payload: OpportunityUpdatePayload,
+): Promise<OpportunitySummary> {
+  return apiFetch(`/api/opportunities/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createActivity(
+  opportunityId: number,
+  payload: ActivityCreatePayload,
+): Promise<ActivityEntry> {
+  return apiFetch(`/api/opportunities/${opportunityId}/activity`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listFollowUps(params: {

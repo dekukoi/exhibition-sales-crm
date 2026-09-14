@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import crm, follow_ups, schemas
+from app import crm, follow_ups, opportunities, schemas
 from app.config import settings
 from app.db import SessionLocal, get_session
 from app.importer import import_archive
@@ -94,6 +94,35 @@ def get_opportunity_activity(
 ) -> list[schemas.ActivityEntry]:
     entries = crm.get_opportunity_activity(session, opportunity_id)
     return [schemas.ActivityEntry.model_validate(entry) for entry in entries]
+
+
+@app.get("/api/opportunities/statuses")
+def list_opportunity_statuses(session: Annotated[Session, Depends(get_session)]) -> list[str]:
+    return opportunities.list_statuses(session)
+
+
+@app.patch("/api/opportunities/{opportunity_id}")
+def update_opportunity(
+    opportunity_id: int,
+    payload: schemas.OpportunityUpdate,
+    session: Annotated[Session, Depends(get_session)],
+) -> schemas.OpportunitySummary:
+    opportunity = opportunities.update_opportunity(session, opportunity_id, payload)
+    if opportunity is None:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    return schemas.OpportunitySummary.model_validate(opportunity)
+
+
+@app.post("/api/opportunities/{opportunity_id}/activity")
+def create_opportunity_activity(
+    opportunity_id: int,
+    payload: schemas.ActivityCreate,
+    session: Annotated[Session, Depends(get_session)],
+) -> schemas.ActivityEntry:
+    entry = opportunities.add_activity(session, opportunity_id, payload)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    return schemas.ActivityEntry.model_validate(entry)
 
 
 def _follow_up_item(

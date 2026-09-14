@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -53,6 +54,29 @@ class OpportunitySummary(BaseModel):
     brief_notes: str | None
     contact_id: int | None
     fair_edition: FairEditionSummary
+
+
+class OpportunityUpdate(BaseModel):
+    """Editable opportunity fields — the legacy commercial/technical-adjacent columns
+    only; no field is required outside that vocabulary."""
+
+    status: str | None = None
+    amount_eur: Decimal | None = None
+    opened_on: datetime.date | None = None
+    expected_close_on: datetime.date | None = None
+    stand_area_sqm: Decimal | None = None
+    client_budget_eur: Decimal | None = None
+    requested_height_m: Decimal | None = None
+    brief_notes: str | None = None
+
+
+ActivityType = Literal["call", "email", "meeting", "note", "task"]
+
+
+class ActivityCreate(BaseModel):
+    activity_type: ActivityType
+    details: str | None = None
+    follow_up_on: datetime.date | None = None
 
 
 class CompanyDetail(BaseModel):

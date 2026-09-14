@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import crm, schemas
+from app import crm, follow_ups, schemas
 from app.config import settings
 from app.db import SessionLocal, get_session
 from app.importer import import_archive
@@ -94,3 +94,56 @@ def get_opportunity_activity(
 ) -> list[schemas.ActivityEntry]:
     entries = crm.get_opportunity_activity(session, opportunity_id)
     return [schemas.ActivityEntry.model_validate(entry) for entry in entries]
+
+
+def _follow_up_item(
+    entry: ActivityLogEntry, company: Company, opportunity: Opportunity | None
+) -> schemas.FollowUpItem:
+    assert entry.follow_up_on is not None
+    return schemas.FollowUpItem(
+        id=entry.id,
+        follow_up_on=entry.follow_up_on,
+        activity_type=entry.activity_type,
+        details=entry.details,
+        occurred_at=entry.occurred_at,
+        legacy_author=entry.legacy_author,
+        company_id=company.id,
+        company_name=company.company_name,
+        sales_rep=company.sales_rep,
+        opportunity_id=opportunity.id if opportunity else None,
+        opportunity_code=opportunity.opportunity_code if opportunity else None,
+    )
+
+
+@app.get("/api/follow-ups")
+def list_follow_ups(
+    session: Annotated[Session, Depends(get_session)],
+    sales_rep: str | None = None,
+    company: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> schemas.FollowUpListResult:
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    rows = follow_ups.list_pending_follow_ups(
+        session, sales_rep=sales_rep, company=company, limit=limit + 1, offset=offset
+    )
+    has_more = len(rows) > limit
+    items = [_follow_up_item(entry, comp, opp) for entry, comp, opp in rows[:limit]]
+    return schemas.FollowUpListResult(items=items, has_more=has_more)
+
+
+@app.get("/api/follow-ups/sales-reps")
+def list_follow_up_sales_reps(session: Annotated[Session, Depends(get_session)]) -> list[str]:
+    return follow_ups.list_sales_reps(session)
+
+
+@app.post("/api/follow-ups/{follow_up_id}/complete")
+def complete_follow_up(
+    follow_up_id: int, session: Annotated[Session, Depends(get_session)]
+) -> schemas.FollowUpItem:
+    result = follow_ups.mark_follow_up_complete(session, follow_up_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    entry, company, opportunity = result
+    return _follow_up_item(entry, company, opportunity)

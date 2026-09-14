@@ -80,3 +80,22 @@ class ActivityEntry(BaseModel):
     follow_up_on: datetime.date | None
     completion_marker: bool | None
     legacy_author: str | None
+
+
+class FollowUpItem(BaseModel):
+    id: int
+    follow_up_on: datetime.date
+    activity_type: str
+    details: str | None
+    occurred_at: datetime.datetime | None
+    legacy_author: str | None
+    company_id: int
+    company_name: str
+    sales_rep: str | None
+    opportunity_id: int | None
+    opportunity_code: str | None
+
+
+class FollowUpListResult(BaseModel):
+    items: list[FollowUpItem]
+    has_more: bool

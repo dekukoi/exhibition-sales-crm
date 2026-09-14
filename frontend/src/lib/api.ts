@@ -66,8 +66,27 @@ export interface ActivityEntry {
   legacy_author: string | null;
 }
 
-async function apiFetch<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+export interface FollowUpItem {
+  id: number;
+  follow_up_on: string;
+  activity_type: string;
+  details: string | null;
+  occurred_at: string | null;
+  legacy_author: string | null;
+  company_id: number;
+  company_name: string;
+  sales_rep: string | null;
+  opportunity_id: number | null;
+  opportunity_code: string | null;
+}
+
+export interface FollowUpListResult {
+  items: FollowUpItem[];
+  has_more: boolean;
+}
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, init);
   if (!res.ok) {
     throw new Error(`Request to ${path} failed: ${res.status}`);
   }
@@ -88,4 +107,24 @@ export function getCompanyActivity(id: number): Promise<ActivityEntry[]> {
 
 export function getOpportunityActivity(id: number): Promise<ActivityEntry[]> {
   return apiFetch(`/api/opportunities/${id}/activity`);
+}
+
+export function listFollowUps(params: {
+  salesRep?: string;
+  company?: string;
+  offset?: number;
+}): Promise<FollowUpListResult> {
+  const query = new URLSearchParams();
+  if (params.salesRep) query.set("sales_rep", params.salesRep);
+  if (params.company) query.set("company", params.company);
+  if (params.offset) query.set("offset", String(params.offset));
+  return apiFetch(`/api/follow-ups?${query.toString()}`);
+}
+
+export function listFollowUpSalesReps(): Promise<string[]> {
+  return apiFetch("/api/follow-ups/sales-reps");
+}
+
+export function completeFollowUp(id: number): Promise<FollowUpItem> {
+  return apiFetch(`/api/follow-ups/${id}/complete`, { method: "POST" });
 }

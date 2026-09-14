@@ -123,3 +123,18 @@ class FollowUpItem(BaseModel):
 class FollowUpListResult(BaseModel):
     items: list[FollowUpItem]
     has_more: bool
+
+
+class HandoffRunSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    opportunity_id: int
+    created_at: datetime.datetime
+    brief: dict[str, object]
+    preparer_output: dict[str, object]
+    checker_output: dict[str, object]
+    verdict: Literal["continue", "stop"]
+    heads_up: bool
+    reason: str
+    simulated: bool

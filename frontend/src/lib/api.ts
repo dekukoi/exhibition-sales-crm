@@ -104,6 +104,33 @@ export interface FollowUpListResult {
   has_more: boolean;
 }
 
+export interface HandoffPreparerOutput {
+  simulated: boolean;
+  proposed_next_step: string;
+}
+
+export interface HandoffCheckerOutput {
+  simulated: boolean;
+  heads_up_ready: boolean;
+  missing_fields: string[];
+  edition_limit_known: boolean;
+  height_within_limit: boolean | null;
+  notes: string;
+}
+
+export interface HandoffRunSummary {
+  id: number;
+  opportunity_id: number;
+  created_at: string;
+  brief: Record<string, unknown>;
+  preparer_output: HandoffPreparerOutput;
+  checker_output: HandoffCheckerOutput;
+  verdict: "continue" | "stop";
+  heads_up: boolean;
+  reason: string;
+  simulated: boolean;
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {
@@ -152,6 +179,14 @@ export function createActivity(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function listHandoffRuns(opportunityId: number): Promise<HandoffRunSummary[]> {
+  return apiFetch(`/api/opportunities/${opportunityId}/handoff-runs`);
+}
+
+export function triggerHandoffRun(opportunityId: number): Promise<HandoffRunSummary> {
+  return apiFetch(`/api/opportunities/${opportunityId}/handoff-runs`, { method: "POST" });
 }
 
 export function listFollowUps(params: {

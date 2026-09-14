@@ -23,12 +23,15 @@ import {
   getCompany,
   getCompanyActivity,
   getOpportunityActivity,
+  listHandoffRuns,
   listOpportunityStatuses,
+  triggerHandoffRun,
   updateOpportunity,
   type ActivityCreatePayload,
   type ActivityEntry,
   type ActivityType,
   type CompanyDetail,
+  type HandoffRunSummary,
   type OpportunitySummary,
   type OpportunityUpdatePayload,
 } from "@/lib/api";
@@ -219,6 +222,8 @@ export default function CompanyDetailPage() {
                 opportunity={selectedOpportunity}
                 refreshKey={activityRefreshKey}
               />
+
+              <HandoffPanel opportunity={selectedOpportunity} />
             </>
           )}
         </CardContent>
@@ -538,5 +543,99 @@ function LogActivityForm({
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+function HandoffPanel({ opportunity }: { opportunity: OpportunitySummary }) {
+  const [runs, setRuns] = useState<HandoffRunSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [triggering, setTriggering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    listHandoffRuns(opportunity.id)
+      .then(setRuns)
+      .catch((err: unknown) =>
+        setError(err instanceof Error ? err.message : "Failed to load handoff runs"),
+      )
+      .finally(() => setLoading(false));
+  }, [opportunity.id]);
+
+  async function handleRun() {
+    setTriggering(true);
+    setError(null);
+    try {
+      const run = await triggerHandoffRun(opportunity.id);
+      setRuns((current) => [run, ...current]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to run the handoff assistant");
+    } finally {
+      setTriggering(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardTitle>Handoff assistant</CardTitle>
+        <Button size="sm" onClick={handleRun} disabled={triggering}>
+          {triggering ? "Running…" : "Run handoff assistant"}
+        </Button>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <p className="text-xs text-muted-foreground">
+          A deterministic, rule-based stand-in for a model response — not a real model call. Every
+          run below is labeled simulated.
+        </p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : runs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No handoff runs yet for this opportunity.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {runs.map((run) => (
+              <HandoffRunCard key={run.id} run={run} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HandoffRunCard({ run }: { run: HandoffRunSummary }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge
+          variant={run.verdict === "continue" ? "default" : "outline"}
+          className={run.verdict === "stop" ? "border-destructive text-destructive" : undefined}
+        >
+          {run.verdict}
+        </Badge>
+        {run.heads_up && <Badge variant="secondary">Heads-up</Badge>}
+        <span className="text-xs text-muted-foreground">
+          {run.created_at.slice(0, 16).replace("T", " ")}
+        </span>
+        <Badge variant="outline" className="ml-auto">
+          simulated
+        </Badge>
+      </div>
+      <p>{run.reason}</p>
+      <Separator />
+      <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+        <div>
+          <div className="font-medium text-foreground">Preparer (simulated)</div>
+          <p>{run.preparer_output.proposed_next_step}</p>
+        </div>
+        <div>
+          <div className="font-medium text-foreground">Checker (simulated)</div>
+          <p>{run.checker_output.notes}</p>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app import crm, follow_ups, opportunities, schemas
+from app import crm, follow_ups, handoff, opportunities, schemas
 from app.config import settings
 from app.db import SessionLocal, get_session
 from app.importer import import_archive
@@ -123,6 +123,24 @@ def create_opportunity_activity(
     if entry is None:
         raise HTTPException(status_code=404, detail="Opportunity not found")
     return schemas.ActivityEntry.model_validate(entry)
+
+
+@app.post("/api/opportunities/{opportunity_id}/handoff-runs")
+def trigger_handoff_run(
+    opportunity_id: int, session: Annotated[Session, Depends(get_session)]
+) -> schemas.HandoffRunSummary:
+    run = handoff.run_handoff(session, opportunity_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    return schemas.HandoffRunSummary.model_validate(run)
+
+
+@app.get("/api/opportunities/{opportunity_id}/handoff-runs")
+def list_handoff_runs(
+    opportunity_id: int, session: Annotated[Session, Depends(get_session)]
+) -> list[schemas.HandoffRunSummary]:
+    runs = handoff.list_handoff_runs(session, opportunity_id)
+    return [schemas.HandoffRunSummary.model_validate(run) for run in runs]
 
 
 def _follow_up_item(

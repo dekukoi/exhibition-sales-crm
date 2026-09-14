@@ -1,7 +1,9 @@
 import datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -79,6 +81,7 @@ class Opportunity(Base):
     activity_log_entries: Mapped[list["ActivityLogEntry"]] = relationship(
         back_populates="opportunity"
     )
+    handoff_runs: Mapped[list["HandoffRun"]] = relationship(back_populates="opportunity")
 
 
 class ActivityLogEntry(Base):
@@ -100,3 +103,26 @@ class ActivityLogEntry(Base):
 
     company: Mapped["Company"] = relationship(back_populates="activity_log_entries")
     opportunity: Mapped["Opportunity | None"] = relationship(back_populates="activity_log_entries")
+
+
+class HandoffRun(Base):
+    """One run of the handoff assistant against an opportunity — append-only: editing
+    the opportunity's brief and re-running creates a new row rather than overwriting
+    the previous one, so the full history stays reviewable (see app/handoff/service.py).
+    """
+
+    __tablename__ = "handoff_run"
+    __table_args__ = (Index("ix_handoff_run_opportunity_created", "opportunity_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    opportunity_id: Mapped[int] = mapped_column(ForeignKey("opportunity.id"))
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    brief: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    preparer_output: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    checker_output: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    verdict: Mapped[str] = mapped_column(String(20))
+    heads_up: Mapped[bool] = mapped_column()
+    reason: Mapped[str] = mapped_column(Text)
+    simulated: Mapped[bool] = mapped_column()
+
+    opportunity: Mapped["Opportunity"] = relationship(back_populates="handoff_runs")

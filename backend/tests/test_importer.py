@@ -143,6 +143,27 @@ def test_import_archive_is_idempotent(db_session):
     assert len(all_companies) == 2
 
 
+def test_import_archive_does_not_clobber_edits_on_restart(db_session):
+    """A restart's automatic re-import must not discard changes made through the app
+    (e.g. an opportunity edit, a completed follow-up) — "later starts must keep user
+    changes" per the assignment."""
+    import_archive(db_session, FIXTURES_DIR)
+
+    opp1 = db_session.scalar(select(Opportunity).where(Opportunity.opportunity_code == "OPP001"))
+    opp1.status = "won"
+    entry = db_session.scalar(select(ActivityLogEntry).where(ActivityLogEntry.entry_id == "A001"))
+    entry.completion_marker = True
+    db_session.commit()
+
+    import_archive(db_session, FIXTURES_DIR)
+
+    db_session.expire_all()
+    opp1 = db_session.scalar(select(Opportunity).where(Opportunity.opportunity_code == "OPP001"))
+    entry = db_session.scalar(select(ActivityLogEntry).where(ActivityLogEntry.entry_id == "A001"))
+    assert opp1.status == "won"
+    assert entry.completion_marker is True
+
+
 # --- full-archive smoke test -------------------------------------------------
 
 

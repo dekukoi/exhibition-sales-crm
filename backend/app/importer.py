@@ -104,16 +104,20 @@ def _chunks(rows: list[dict[str, Any]], size: int = _BATCH_SIZE) -> Iterable[lis
 
 
 def _upsert(session: Session, model: Any, rows: list[dict[str, Any]], conflict_col: str) -> None:
+    """Insert rows not already present by their legacy code; leave existing rows alone.
+
+    A plain restart must not overwrite values the app itself has since written (an
+    edited opportunity, a completed follow-up, ...) back to the original CSV import —
+    "later starts must keep user changes" per the assignment. A full re-seed only ever
+    happens against an empty database (reset.sh wipes it first), where every row is a
+    fresh insert regardless, so DO NOTHING costs nothing there.
+    """
     if not rows:
         return
     table = model.__table__
-    update_col_names = [c.name for c in table.columns if c.name not in ("id", conflict_col)]
     for batch in _chunks(rows):
         stmt = pg_insert(table).values(batch)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=[conflict_col],
-            set_={name: stmt.excluded[name] for name in update_col_names},
-        )
+        stmt = stmt.on_conflict_do_nothing(index_elements=[conflict_col])
         session.execute(stmt)
 
 

@@ -141,13 +141,21 @@ export default function FollowUpsPage() {
           value={company}
           onChange={(e) => handleCompanyChange(e.target.value)}
         />
-        <Input
-          type="date"
-          aria-label="Due on or before"
-          className="max-w-xs"
-          value={dueBefore}
-          onChange={(e) => handleDueBeforeChange(e.target.value)}
-        />
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor="due-before"
+            className="text-sm whitespace-nowrap text-muted-foreground"
+          >
+            Due on or before
+          </label>
+          <Input
+            id="due-before"
+            type="date"
+            className="w-44"
+            value={dueBefore}
+            onChange={(e) => handleDueBeforeChange(e.target.value)}
+          />
+        </div>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

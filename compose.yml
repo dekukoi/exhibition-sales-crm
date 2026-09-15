@@ -15,7 +15,9 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      target: runtime
     environment:
       DATABASE_URL: postgresql+psycopg://crm:local-development-only@db:5432/crm
       DATA_DIR: /app/data
@@ -31,6 +33,33 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+
+  test-db:
+    image: postgres:17.6-alpine3.22
+    profiles: ["test"]
+    environment:
+      POSTGRES_DB: crm_test
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: local-development-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  backend-test:
+    profiles: ["test"]
+    build:
+      context: ./backend
+      target: test
+    environment:
+      TEST_DATABASE_URL: postgresql+psycopg://crm:local-development-only@test-db:5432/crm_test
+    depends_on:
+      test-db:
+        condition: service_healthy
 
 volumes:
   postgres-data:

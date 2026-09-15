@@ -6,7 +6,7 @@ Create your own public Git repository for the work. If you received this starter
 
 The starter runs PostgreSQL. Add your application services to `compose.yml` and put your code wherever suits your stack. The export is in `data/`; its [README](data/README.md) describes the files and field formats.
 
-Run `./dev.sh` to start and `docker compose down` to stop. `./reset.sh` removes the project's data. Once you've added the application, `./verify.sh` checks that it responds on port 3000. Until then, the HTTP check will fail.
+Run `./dev.sh` to start and `docker compose down` to stop. `./reset.sh` removes the project's data. Once you've added the application, `./verify.sh` checks that it responds on port 3000. Until then, the HTTP check will fail. Run `./test.sh` to run the backend test suite against a throwaway, containerized database — no host Python or database required.
 
 ## Submission notes
 

@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
@@ -173,15 +174,23 @@ def list_follow_ups(
     session: Annotated[Session, Depends(get_session)],
     sales_rep: str | None = None,
     company: str | None = None,
+    due_before: date | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> schemas.FollowUpListResult:
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
     rows = follow_ups.list_pending_follow_ups(
-        session, sales_rep=sales_rep, company=company, limit=limit, offset=offset
+        session,
+        sales_rep=sales_rep,
+        company=company,
+        due_before=due_before,
+        limit=limit,
+        offset=offset,
     )
-    total = follow_ups.count_pending_follow_ups(session, sales_rep=sales_rep, company=company)
+    total = follow_ups.count_pending_follow_ups(
+        session, sales_rep=sales_rep, company=company, due_before=due_before
+    )
     items = [_follow_up_item(entry, comp, opp) for entry, comp, opp in rows]
     has_more = offset + len(items) < total
     return schemas.FollowUpListResult(items=items, has_more=has_more, total=total)

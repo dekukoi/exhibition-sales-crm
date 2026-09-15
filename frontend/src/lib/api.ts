@@ -124,11 +124,24 @@ export interface HandoffCheckerOutput {
   notes: string;
 }
 
+export interface HandoffBrief {
+  opportunity_id: number;
+  opportunity_code: string;
+  fair_name: string;
+  fair_edition_code: string;
+  max_stand_height_m: string | null;
+  client_budget_eur: string | null;
+  stand_area_sqm: string | null;
+  requested_height_m: string | null;
+  description: string | null;
+  brief_notes: string | null;
+}
+
 export interface HandoffRunSummary {
   id: number;
   opportunity_id: number;
   created_at: string;
-  brief: Record<string, unknown>;
+  brief: HandoffBrief;
   preparer_output: HandoffPreparerOutput;
   checker_output: HandoffCheckerOutput;
   verdict: "continue" | "stop";

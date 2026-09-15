@@ -137,10 +137,19 @@ export interface HandoffRunSummary {
   simulated: boolean;
 }
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(path: string, status: number) {
+    super(`Request to ${path} failed: ${status}`);
+    this.status = status;
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {
-    throw new Error(`Request to ${path} failed: ${res.status}`);
+    throw new ApiError(path, res.status);
   }
   return res.json() as Promise<T>;
 }

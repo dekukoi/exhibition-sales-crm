@@ -45,6 +45,7 @@ class CheckerOutput:
     edition_limit_known: bool
     height_within_limit: bool | None
     notes: str
+    validated_proposal: str
 
 
 @dataclass(frozen=True)

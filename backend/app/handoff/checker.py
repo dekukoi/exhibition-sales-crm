@@ -1,5 +1,11 @@
-"""Checker role: validates the brief against the project's hybrid staged handoff policy
-(docs/adr/0004) — independently of what the preparer proposed.
+"""Checker role: validates the brief — and the preparer's proposed next step — against
+the project's hybrid staged handoff policy (docs/adr/0004).
+
+The verdict-candidate fields below (`missing_fields`, `edition_limit_known`,
+`height_within_limit`, `heads_up_ready`) are derived from the brief alone, same as
+before this role received the preparer's proposal: the checker reaches its conclusion
+independently of what was proposed, then records which proposal that conclusion applies
+to via `validated_proposal`, so a saved run shows the chain of custody between roles.
 
 - "Heads-up" is available as soon as the client-stated budget is known (the fair
   edition is always known by this point, since `Opportunity.fair_edition_id` is
@@ -13,7 +19,7 @@ from decimal import Decimal
 from app.handoff.types import CheckerOutput, HandoffBrief
 
 
-def check(brief: HandoffBrief) -> CheckerOutput:
+def check(brief: HandoffBrief, proposed_next_step: str) -> CheckerOutput:
     missing: list[str] = []
     if brief.stand_area_sqm is None:
         missing.append("stand area")
@@ -36,6 +42,7 @@ def check(brief: HandoffBrief) -> CheckerOutput:
         edition_limit_known=edition_limit_known,
         height_within_limit=height_within_limit,
         notes=notes,
+        validated_proposal=proposed_next_step,
     )
 
 

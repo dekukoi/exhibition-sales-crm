@@ -122,6 +122,7 @@ export interface HandoffCheckerOutput {
   edition_limit_known: boolean;
   height_within_limit: boolean | null;
   notes: string;
+  validated_proposal: string;
 }
 
 export interface HandoffBrief {

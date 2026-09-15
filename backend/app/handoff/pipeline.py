@@ -13,7 +13,7 @@ from app.handoff.types import HandoffBrief, HandoffOutcome
 
 def run_handoff_pipeline(brief: HandoffBrief) -> HandoffOutcome:
     preparer_output = prepare(brief)
-    checker_output = check(brief)
+    checker_output = check(brief, preparer_output.proposed_next_step)
     coordinator_output = coordinate(brief, checker_output)
     return HandoffOutcome(
         brief=brief,

@@ -213,12 +213,14 @@ export function triggerHandoffRun(opportunityId: number): Promise<HandoffRunSumm
 export function listFollowUps(params: {
   salesRep?: string;
   company?: string;
+  dueBefore?: string;
   limit?: number;
   offset?: number;
 }): Promise<FollowUpListResult> {
   const query = new URLSearchParams();
   if (params.salesRep) query.set("sales_rep", params.salesRep);
   if (params.company) query.set("company", params.company);
+  if (params.dueBefore) query.set("due_before", params.dueBefore);
   if (params.limit) query.set("limit", String(params.limit));
   if (params.offset) query.set("offset", String(params.offset));
   return apiFetch(`/api/follow-ups?${query.toString()}`);

@@ -35,6 +35,7 @@ export default function FollowUpsPage() {
   const [salesReps, setSalesReps] = useState<string[]>([]);
   const [salesRep, setSalesRep] = useState("");
   const [company, setCompany] = useState("");
+  const [dueBefore, setDueBefore] = useState("");
   const [page, setPage] = useState(0);
   const [items, setItems] = useState<FollowUpItem[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -55,6 +56,7 @@ export default function FollowUpsPage() {
       listFollowUps({
         salesRep: salesRep || undefined,
         company: company.trim() || undefined,
+        dueBefore: dueBefore || undefined,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       })
@@ -74,7 +76,7 @@ export default function FollowUpsPage() {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [salesRep, company, page, refreshKey]);
+  }, [salesRep, company, dueBefore, page, refreshKey]);
 
   function handleSalesRepChange(value: string) {
     setSalesRep(value);
@@ -83,6 +85,11 @@ export default function FollowUpsPage() {
 
   function handleCompanyChange(value: string) {
     setCompany(value);
+    setPage(0);
+  }
+
+  function handleDueBeforeChange(value: string) {
+    setDueBefore(value);
     setPage(0);
   }
 
@@ -133,6 +140,13 @@ export default function FollowUpsPage() {
           className="max-w-xs"
           value={company}
           onChange={(e) => handleCompanyChange(e.target.value)}
+        />
+        <Input
+          type="date"
+          aria-label="Due on or before"
+          className="max-w-xs"
+          value={dueBefore}
+          onChange={(e) => handleDueBeforeChange(e.target.value)}
         />
       </div>
 

@@ -26,10 +26,14 @@ from app.models import ActivityLogEntry, Company, Contact, Opportunity
 def search_companies(
     session: Session, q: str, limit: int = 15, offset: int = 0
 ) -> tuple[list[tuple[Company, Contact | None]], int]:
-    """Returns (this page of (company, matched_contact) results, total distinct matches)."""
+    """Returns (this page of (company, matched_contact) results, total distinct matches).
+
+    A blank `q` browses the full company list (ordered by name) rather than matching
+    nothing, so the search box narrows an already-visible list instead of gating it.
+    """
     q = q.strip()
     if not q:
-        return [], 0
+        return _browse_companies(session, limit=limit, offset=offset)
     pattern = f"%{q}%"
     prefix = f"{q}%"
 
@@ -91,6 +95,20 @@ def search_companies(
         for row in page
     ]
     return results, total
+
+
+def _browse_companies(
+    session: Session, limit: int, offset: int
+) -> tuple[list[tuple[Company, Contact | None]], int]:
+    """Unfiltered page of companies, ordered by name (backed by ix_company_name)."""
+    total = session.scalar(select(func.count()).select_from(Company)) or 0
+    if total == 0:
+        return [], 0
+
+    companies = session.scalars(
+        select(Company).order_by(Company.company_name).limit(limit).offset(offset)
+    ).all()
+    return [(company, None) for company in companies], total
 
 
 def get_company_detail(session: Session, company_id: int) -> Company | None:

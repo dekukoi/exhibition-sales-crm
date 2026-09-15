@@ -1,6 +1,8 @@
 import json
+import shutil
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from sqlalchemy import select
@@ -9,15 +11,29 @@ from app.importer import (
     ROME_TZ,
     ImportSummary,
     import_archive,
+    import_archive_if_needed,
     normalize_status,
     parse_completion_marker,
     parse_date,
     parse_datetime_rome,
     parse_decimal,
 )
-from app.models import ActivityLogEntry, Company, Contact, FairEdition, Opportunity
+from app.models import ActivityLogEntry, Company, Contact, FairEdition, ImportState, Opportunity
 
 from .conftest import FIXTURES_DIR, REPO_DATA_DIR
+
+
+def _archive_copy(tmp_path: Path, manifest_content: str = "v1", name: str = "archive") -> Path:
+    """A throwaway archive directory: the fixture CSVs plus a manifest.json whose
+    content stands in for the real manifest's checksums — only its bytes matter to
+    the skip decision, not its schema."""
+    archive = tmp_path / name
+    archive.mkdir()
+    for csv_file in FIXTURES_DIR.glob("*.csv"):
+        shutil.copy(csv_file, archive / csv_file.name)
+    (archive / "manifest.json").write_text(manifest_content)
+    return archive
+
 
 # --- interpretation-rule unit tests -----------------------------------------
 
@@ -162,6 +178,80 @@ def test_import_archive_does_not_clobber_edits_on_restart(db_session):
     entry = db_session.scalar(select(ActivityLogEntry).where(ActivityLogEntry.entry_id == "A001"))
     assert opp1.status == "won"
     assert entry.completion_marker is True
+
+
+# --- startup skip decision ---------------------------------------------------
+
+
+def test_import_archive_if_needed_imports_on_first_run(db_session, tmp_path):
+    archive = _archive_copy(tmp_path)
+
+    summary = import_archive_if_needed(db_session, archive)
+
+    assert summary is not None
+    assert summary.companies == 2
+    state = db_session.scalar(select(ImportState))
+    assert state is not None
+
+
+def test_import_archive_if_needed_skips_when_manifest_unchanged(db_session, tmp_path):
+    archive = _archive_copy(tmp_path)
+    import_archive_if_needed(db_session, archive)
+
+    second = import_archive_if_needed(db_session, archive)
+
+    assert second is None
+    assert db_session.scalar(select(Company)) is not None
+    assert len(db_session.scalars(select(Company)).all()) == 2
+
+
+def test_import_archive_if_needed_reimports_when_archive_is_replaced(db_session, tmp_path):
+    archive = _archive_copy(tmp_path, manifest_content="v1")
+    import_archive_if_needed(db_session, archive)
+
+    replacement = _archive_copy(tmp_path, manifest_content="v2", name="replacement")
+    with (replacement / "companies_and_contacts.csv").open("a", encoding="utf-8") as f:
+        f.write("4;C003;New Exhibitor Srl;TO;Piemonte;Paolo Neri;CT004;Sara;Blu;;;;LEGACY_C\n")
+
+    summary = import_archive_if_needed(db_session, replacement)
+
+    assert summary is not None
+    assert summary.companies == 3
+    companies = db_session.scalars(select(Company)).all()
+    assert {c.company_code for c in companies} == {"C001", "C002", "C003"}
+
+
+def test_import_archive_if_needed_does_not_clobber_edits_on_restart(db_session, tmp_path):
+    """The skip is purely an optimisation; when it does re-run (manifest changed) it
+    must still preserve edits made through the app, same as a plain import_archive
+    call — see test_import_archive_does_not_clobber_edits_on_restart above."""
+    archive = _archive_copy(tmp_path, manifest_content="v1")
+    import_archive_if_needed(db_session, archive)
+
+    opp1 = db_session.scalar(select(Opportunity).where(Opportunity.opportunity_code == "OPP001"))
+    opp1.status = "won"
+    db_session.commit()
+
+    replacement = _archive_copy(tmp_path, manifest_content="v2", name="replacement")
+    import_archive_if_needed(db_session, replacement)
+
+    db_session.expire_all()
+    opp1 = db_session.scalar(select(Opportunity).where(Opportunity.opportunity_code == "OPP001"))
+    assert opp1.status == "won"
+
+
+def test_import_archive_if_needed_always_imports_without_a_manifest(db_session, tmp_path):
+    archive = tmp_path / "no-manifest-archive"
+    archive.mkdir()
+    for csv_file in FIXTURES_DIR.glob("*.csv"):
+        shutil.copy(csv_file, archive / csv_file.name)
+
+    first = import_archive_if_needed(db_session, archive)
+    second = import_archive_if_needed(db_session, archive)
+
+    assert first is not None
+    assert second is not None
+    assert db_session.scalar(select(ImportState)) is None
 
 
 # --- full-archive smoke test -------------------------------------------------

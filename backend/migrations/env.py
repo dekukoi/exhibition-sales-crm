@@ -15,7 +15,10 @@ from app.models import (  # noqa: F401  (import registers tables on Base.metadat
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: the default (True) silently disables every
+    # logger created before this call, including the app's own — so startup/import
+    # progress logged after migrations run would vanish with no error.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

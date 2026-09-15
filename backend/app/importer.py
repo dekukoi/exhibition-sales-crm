@@ -15,9 +15,11 @@ replaced `data/` folder never duplicates rows.
 from __future__ import annotations
 
 import csv
+import hashlib
+import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -27,10 +29,13 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from app.models import ActivityLogEntry, Company, Contact, FairEdition, Opportunity
+from app.models import ActivityLogEntry, Company, Contact, FairEdition, ImportState, Opportunity
+
+logger = logging.getLogger(__name__)
 
 ROME_TZ = ZoneInfo("Europe/Rome")
 _BATCH_SIZE = 2000
+_IMPORT_STATE_ID = 1
 
 
 @dataclass
@@ -103,7 +108,9 @@ def _chunks(rows: list[dict[str, Any]], size: int = _BATCH_SIZE) -> Iterable[lis
         yield rows[i : i + size]
 
 
-def _upsert(session: Session, model: Any, rows: list[dict[str, Any]], conflict_col: str) -> None:
+def _upsert(
+    session: Session, model: Any, rows: list[dict[str, Any]], conflict_col: str, label: str
+) -> None:
     """Insert rows not already present by their legacy code; leave existing rows alone.
 
     A plain restart must not overwrite values the app itself has since written (an
@@ -113,12 +120,17 @@ def _upsert(session: Session, model: Any, rows: list[dict[str, Any]], conflict_c
     fresh insert regardless, so DO NOTHING costs nothing there.
     """
     if not rows:
+        logger.info("%s: nothing to import", label)
         return
     table = model.__table__
+    total = len(rows)
+    done = 0
     for batch in _chunks(rows):
         stmt = pg_insert(table).values(batch)
         stmt = stmt.on_conflict_do_nothing(index_elements=[conflict_col])
         session.execute(stmt)
+        done += len(batch)
+        logger.info("%s: upserted %d/%d rows", label, done, total)
 
 
 def _code_to_id(session: Session, model: Any, code_col: str) -> dict[str, int]:
@@ -127,7 +139,50 @@ def _code_to_id(session: Session, model: Any, code_col: str) -> dict[str, int]:
     return {code: id_ for code, id_ in rows}
 
 
+def _manifest_fingerprint(data_dir: Path) -> str | None:
+    """Sha256 of `data/manifest.json`'s bytes, or None when the archive has no
+    manifest. An opaque fingerprint of "which archive this is" — its content is never
+    otherwise parsed, so any change to it (a different archive) is enough to trigger
+    a re-import.
+    """
+    manifest_path = data_dir / "manifest.json"
+    if not manifest_path.exists():
+        return None
+    return hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+
+
+def import_archive_if_needed(session: Session, data_dir: Path) -> ImportSummary | None:
+    """Run `import_archive` unless the archive is unchanged since the last import.
+
+    This is an optimisation only: `import_archive` stays idempotent on its own
+    merits (see `_upsert`), so skipping it here never risks correctness — worst
+    case, a missing or unreadable manifest just means every start re-imports.
+    Returns None when the import was skipped.
+    """
+    fingerprint = _manifest_fingerprint(data_dir)
+    state = session.get(ImportState, _IMPORT_STATE_ID)
+    if fingerprint is not None and state is not None and state.manifest_sha256 == fingerprint:
+        logger.info("Archive unchanged (manifest sha256=%s); skipping import", fingerprint[:12])
+        return None
+
+    logger.info("Importing archive from %s", data_dir)
+    summary = import_archive(session, data_dir)
+
+    if fingerprint is not None:
+        session.merge(
+            ImportState(
+                id=_IMPORT_STATE_ID,
+                manifest_sha256=fingerprint,
+                imported_at=datetime.now(UTC),
+            )
+        )
+        session.commit()
+
+    return summary
+
+
 def import_archive(session: Session, data_dir: Path) -> ImportSummary:
+    logger.info("Import starting: %s", data_dir)
     summary = ImportSummary()
 
     _import_fair_editions(session, data_dir, summary)
@@ -140,6 +195,16 @@ def import_archive(session: Session, data_dir: Path) -> ImportSummary:
     _import_activity_log(session, data_dir, summary, company_ids, opportunity_ids)
 
     session.commit()
+    logger.info(
+        "Import complete: %d companies, %d contacts, %d fair editions, "
+        "%d opportunities, %d activity log entries (%d skipped)",
+        summary.companies,
+        summary.contacts,
+        summary.fair_editions,
+        summary.opportunities,
+        summary.activity_log_entries,
+        len(summary.skipped),
+    )
     return summary
 
 
@@ -161,7 +226,7 @@ def _import_fair_editions(session: Session, data_dir: Path, summary: ImportSumma
                 "max_stand_height_m": parse_decimal(raw.get("max_stand_height_m")),
             }
         )
-    _upsert(session, FairEdition, rows, "fair_edition_code")
+    _upsert(session, FairEdition, rows, "fair_edition_code", "fair_editions")
     summary.fair_editions = len(rows)
 
 
@@ -208,7 +273,7 @@ def _import_companies_and_contacts(
             }
         )
 
-    _upsert(session, Company, list(companies.values()), "company_code")
+    _upsert(session, Company, list(companies.values()), "company_code", "companies")
     summary.companies = len(companies)
 
     company_ids = _code_to_id(session, Company, "company_code")
@@ -225,7 +290,7 @@ def _import_companies_and_contacts(
         for c in contacts
         if c["company_code"] in company_ids
     ]
-    _upsert(session, Contact, contact_rows, "contact_code")
+    _upsert(session, Contact, contact_rows, "contact_code", "contacts")
     summary.contacts = len(contact_rows)
 
 
@@ -273,7 +338,7 @@ def _import_opportunities(
                 "brief_notes": _empty_to_none(raw.get("brief_notes")),
             }
         )
-    _upsert(session, Opportunity, rows, "opportunity_code")
+    _upsert(session, Opportunity, rows, "opportunity_code", "opportunities")
     summary.opportunities = len(rows)
 
 
@@ -311,5 +376,5 @@ def _import_activity_log(
                 "legacy_author": _empty_to_none(raw.get("legacy_author")),
             }
         )
-    _upsert(session, ActivityLogEntry, rows, "entry_id")
+    _upsert(session, ActivityLogEntry, rows, "entry_id", "activity_log")
     summary.activity_log_entries = len(rows)

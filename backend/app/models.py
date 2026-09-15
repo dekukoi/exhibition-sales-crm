@@ -126,3 +126,19 @@ class HandoffRun(Base):
     simulated: Mapped[bool] = mapped_column()
 
     opportunity: Mapped["Opportunity"] = relationship(back_populates="handoff_runs")
+
+
+class ImportState(Base):
+    """Singleton row (id=1) recording the archive last imported at startup.
+
+    `manifest_sha256` is a fingerprint of `data/manifest.json`, not a correctness
+    guarantee — the importer's own upserts stay idempotent regardless. This just lets
+    a restart against an unchanged archive skip re-walking ~75k source rows (see
+    app/importer.py:import_archive_if_needed).
+    """
+
+    __tablename__ = "import_state"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    manifest_sha256: Mapped[str] = mapped_column(String(64))
+    imported_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))

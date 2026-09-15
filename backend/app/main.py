@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date
@@ -13,8 +14,16 @@ from sqlalchemy.orm import Session
 from app import crm, follow_ups, handoff, opportunities, schemas
 from app.config import settings
 from app.db import SessionLocal, get_session
-from app.importer import import_archive
+from app.importer import import_archive_if_needed
 from app.models import ActivityLogEntry, Company, Contact, Opportunity
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# Alembic's fileConfig (see migrations/env.py, run on every startup) resets the root
+# logger's level to WARNING, which would otherwise silently swallow our INFO-level
+# startup/import progress logged after migrations run. Giving "app" its own explicit
+# level makes it independent of whatever the root logger's level is at call time.
+logging.getLogger("app").setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
@@ -28,9 +37,12 @@ def _run_migrations() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    logger.info("Running database migrations")
     _run_migrations()
+    logger.info("Migrations up to date")
     with SessionLocal() as session:
-        import_archive(session, settings.data_dir)
+        if import_archive_if_needed(session, settings.data_dir) is None:
+            logger.info("Startup import skipped; serving with existing data")
     yield
 
 

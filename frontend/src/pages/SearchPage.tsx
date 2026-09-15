@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { searchCompanies, type CompanySearchResult } from "@/lib/api";
 
 const PAGE_SIZE = 15;
+const MIN_QUERY_LENGTH = 2;
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -32,10 +33,11 @@ export default function SearchPage() {
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (!trimmed) {
+    if (trimmed.length < MIN_QUERY_LENGTH) {
       setResults([]);
       setTotal(0);
       setError(null);
+      setLoading(false);
       return;
     }
 
@@ -56,8 +58,10 @@ export default function SearchPage() {
     return () => clearTimeout(timeout);
   }, [query, page]);
 
+  const trimmedQuery = query.trim();
+
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
+    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Exhibition Sales CRM</h1>
@@ -72,8 +76,11 @@ export default function SearchPage() {
 
       <div className="relative">
         <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <label htmlFor="company-search" className="sr-only">
+          Search company name, contact name, or code
+        </label>
         <Input
-          autoFocus
+          id="company-search"
           placeholder="Search company name, contact name, or code…"
           className="pl-9"
           value={query}
@@ -83,7 +90,15 @@ export default function SearchPage() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {query.trim() && !loading && results.length === 0 && !error && (
+      {trimmedQuery && trimmedQuery.length < MIN_QUERY_LENGTH && (
+        <p className="text-sm text-muted-foreground">Keep typing to narrow results.</p>
+      )}
+
+      {trimmedQuery.length >= MIN_QUERY_LENGTH && loading && (
+        <p className="text-sm text-muted-foreground">Searching…</p>
+      )}
+
+      {trimmedQuery.length >= MIN_QUERY_LENGTH && !loading && results.length === 0 && !error && (
         <p className="text-sm text-muted-foreground">No matches for "{query}".</p>
       )}
 
@@ -109,7 +124,7 @@ export default function SearchPage() {
                     <TableCell>
                       <Link
                         to={`/companies/${company.id}`}
-                        className="font-medium hover:underline"
+                        className="rounded-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
                       >
                         {company.company_name}
                       </Link>
@@ -142,6 +157,6 @@ export default function SearchPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </main>
   );
 }

@@ -32,13 +32,14 @@ import {
   type ActivityEntry,
   type ActivityType,
   type CompanyDetail,
+  type HandoffBrief,
   type HandoffRunSummary,
   type OpportunitySummary,
   type OpportunityUpdatePayload,
 } from "@/lib/api";
 
-function money(value: string | null, unit: string): string {
-  if (value === null) return "—";
+function money(value: string | null, unit: string, onNull = "—"): string {
+  if (value === null) return onNull;
   return `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${unit}`;
 }
 
@@ -667,9 +668,33 @@ function HandoffPanel({ opportunity }: { opportunity: OpportunitySummary }) {
   );
 }
 
+function BriefField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="font-medium text-foreground">{label}</div>
+      <p className="break-words">{value}</p>
+    </div>
+  );
+}
+
+function HandoffBriefSummary({ brief }: { brief: HandoffBrief }) {
+  return (
+    <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+      <div className="font-medium text-foreground">Evaluated against</div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <BriefField label="Fair edition" value={`${brief.fair_name} (${brief.fair_edition_code})`} />
+        <BriefField label="Max stand height" value={money(brief.max_stand_height_m, "m", "Unknown")} />
+        <BriefField label="Stand area" value={money(brief.stand_area_sqm, "m²", "Unknown")} />
+        <BriefField label="Requested height" value={money(brief.requested_height_m, "m", "Unknown")} />
+        <BriefField label="Client budget" value={money(brief.client_budget_eur, "€", "Unknown")} />
+      </div>
+    </div>
+  );
+}
+
 function HandoffRunCard({ run }: { run: HandoffRunSummary }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
+    <div className="flex min-w-0 flex-col gap-2 rounded-md border p-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <Badge
           variant={run.verdict === "continue" ? "default" : "outline"}
@@ -686,6 +711,8 @@ function HandoffRunCard({ run }: { run: HandoffRunSummary }) {
         </Badge>
       </div>
       <p>{run.reason}</p>
+      <Separator />
+      <HandoffBriefSummary brief={run.brief} />
       <Separator />
       <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
         <div>

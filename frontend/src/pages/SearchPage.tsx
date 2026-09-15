@@ -16,14 +16,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { searchCompanies, type CompanySearchResult } from "@/lib/api";
 
 const PAGE_SIZE = 15;
-const MIN_QUERY_LENGTH = 2;
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [results, setResults] = useState<CompanySearchResult[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   function handleQueryChange(value: string) {
@@ -33,14 +32,6 @@ export default function SearchPage() {
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (trimmed.length < MIN_QUERY_LENGTH) {
-      setResults([]);
-      setTotal(0);
-      setError(null);
-      setLoading(false);
-      return;
-    }
-
     setLoading(true);
     const timeout = setTimeout(() => {
       searchCompanies(trimmed, { limit: PAGE_SIZE, offset: page * PAGE_SIZE })
@@ -66,7 +57,7 @@ export default function SearchPage() {
         <div>
           <h1 className="text-2xl font-semibold">Exhibition Sales CRM</h1>
           <p className="text-sm text-muted-foreground">
-            Find an exhibitor or contact by name or code.
+            Browse exhibitors, or search by name or code.
           </p>
         </div>
         <Link to="/follow-ups" className="shrink-0 text-sm text-muted-foreground hover:underline">
@@ -90,22 +81,22 @@ export default function SearchPage() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {trimmedQuery && trimmedQuery.length < MIN_QUERY_LENGTH && (
-        <p className="text-sm text-muted-foreground">Keep typing to narrow results.</p>
+      {loading && (
+        <p className="text-sm text-muted-foreground">
+          {trimmedQuery ? "Searching…" : "Loading…"}
+        </p>
       )}
 
-      {trimmedQuery.length >= MIN_QUERY_LENGTH && loading && (
-        <p className="text-sm text-muted-foreground">Searching…</p>
-      )}
-
-      {trimmedQuery.length >= MIN_QUERY_LENGTH && !loading && results.length === 0 && !error && (
-        <p className="text-sm text-muted-foreground">No matches for "{query}".</p>
+      {!loading && results.length === 0 && !error && (
+        <p className="text-sm text-muted-foreground">
+          {trimmedQuery ? `No matches for "${query}".` : "No companies found."}
+        </p>
       )}
 
       {results.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Results ({total})</CardTitle>
+            <CardTitle>{trimmedQuery ? `Results (${total})` : `Companies (${total})`}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Table>

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PaginationFooter } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import {
   Table,
@@ -23,13 +24,15 @@ import {
 } from "@/lib/api";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const PAGE_SIZE = 8;
 
 export default function FollowUpsPage() {
   const [salesReps, setSalesReps] = useState<string[]>([]);
   const [salesRep, setSalesRep] = useState("");
   const [company, setCompany] = useState("");
+  const [page, setPage] = useState(0);
   const [items, setItems] = useState<FollowUpItem[]>([]);
-  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<number | null>(null);
@@ -43,10 +46,15 @@ export default function FollowUpsPage() {
   useEffect(() => {
     setLoading(true);
     const timeout = setTimeout(() => {
-      listFollowUps({ salesRep: salesRep || undefined, company: company.trim() || undefined })
+      listFollowUps({
+        salesRep: salesRep || undefined,
+        company: company.trim() || undefined,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      })
         .then((result) => {
           setItems(result.items);
-          setHasMore(result.has_more);
+          setTotal(result.total);
           setError(null);
         })
         .catch((err: unknown) => {
@@ -56,13 +64,24 @@ export default function FollowUpsPage() {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [salesRep, company]);
+  }, [salesRep, company, page]);
+
+  function handleSalesRepChange(value: string) {
+    setSalesRep(value);
+    setPage(0);
+  }
+
+  function handleCompanyChange(value: string) {
+    setCompany(value);
+    setPage(0);
+  }
 
   async function handleComplete(id: number) {
     setCompletingId(id);
     try {
       await completeFollowUp(id);
       setItems((current) => current.filter((item) => item.id !== id));
+      setTotal((current) => Math.max(0, current - 1));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to mark complete");
     } finally {
@@ -70,22 +89,8 @@ export default function FollowUpsPage() {
     }
   }
 
-  async function loadMore() {
-    try {
-      const result = await listFollowUps({
-        salesRep: salesRep || undefined,
-        company: company.trim() || undefined,
-        offset: items.length,
-      });
-      setItems((current) => [...current, ...result.items]);
-      setHasMore(result.has_more);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load more");
-    }
-  }
-
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 p-8">
       <Link
         to="/"
         className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:underline"
@@ -104,7 +109,7 @@ export default function FollowUpsPage() {
         <Select
           className="w-48"
           value={salesRep}
-          onChange={(e) => setSalesRep(e.target.value)}
+          onChange={(e) => handleSalesRepChange(e.target.value)}
         >
           <option value="">All sales reps</option>
           {salesReps.map((rep) => (
@@ -117,7 +122,7 @@ export default function FollowUpsPage() {
           placeholder="Filter by company name…"
           className="max-w-xs"
           value={company}
-          onChange={(e) => setCompany(e.target.value)}
+          onChange={(e) => handleCompanyChange(e.target.value)}
         />
       </div>
 
@@ -125,7 +130,7 @@ export default function FollowUpsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Pending ({items.length}{hasMore ? "+" : ""})</CardTitle>
+          <CardTitle>Pending ({total})</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {loading ? (
@@ -188,10 +193,15 @@ export default function FollowUpsPage() {
             </Table>
           )}
 
-          {hasMore && (
-            <Button variant="outline" size="sm" className="w-fit" onClick={loadMore}>
-              Load more
-            </Button>
+          {total > 0 && (
+            <PaginationFooter
+              page={page}
+              pageSize={PAGE_SIZE}
+              itemCount={items.length}
+              total={total}
+              onPageChange={setPage}
+              disabled={loading}
+            />
           )}
         </CardContent>
       </Card>

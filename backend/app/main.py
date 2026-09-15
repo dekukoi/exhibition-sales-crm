@@ -54,10 +54,15 @@ def summary(session: Annotated[Session, Depends(get_session)]) -> dict[str, int]
 
 @app.get("/api/companies")
 def search_companies(
-    session: Annotated[Session, Depends(get_session)], q: str = ""
-) -> list[schemas.CompanySearchResult]:
-    matches = crm.search_companies(session, q)
-    return [
+    session: Annotated[Session, Depends(get_session)],
+    q: str = "",
+    limit: int = 15,
+    offset: int = 0,
+) -> schemas.CompanySearchListResult:
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    matches, total = crm.search_companies(session, q, limit=limit, offset=offset)
+    items = [
         schemas.CompanySearchResult(
             id=company.id,
             company_code=company.company_code,
@@ -68,6 +73,7 @@ def search_companies(
         )
         for company, contact in matches
     ]
+    return schemas.CompanySearchListResult(items=items, total=total)
 
 
 @app.get("/api/companies/{company_id}")
@@ -173,11 +179,12 @@ def list_follow_ups(
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
     rows = follow_ups.list_pending_follow_ups(
-        session, sales_rep=sales_rep, company=company, limit=limit + 1, offset=offset
+        session, sales_rep=sales_rep, company=company, limit=limit, offset=offset
     )
-    has_more = len(rows) > limit
-    items = [_follow_up_item(entry, comp, opp) for entry, comp, opp in rows[:limit]]
-    return schemas.FollowUpListResult(items=items, has_more=has_more)
+    total = follow_ups.count_pending_follow_ups(session, sales_rep=sales_rep, company=company)
+    items = [_follow_up_item(entry, comp, opp) for entry, comp, opp in rows]
+    has_more = offset + len(items) < total
+    return schemas.FollowUpListResult(items=items, has_more=has_more, total=total)
 
 
 @app.get("/api/follow-ups/sales-reps")

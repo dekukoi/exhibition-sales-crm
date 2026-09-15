@@ -25,6 +25,11 @@ class CompanySearchResult(BaseModel):
     matched_contact: ContactSummary | None = None
 
 
+class CompanySearchListResult(BaseModel):
+    items: list[CompanySearchResult]
+    total: int
+
+
 class FairEditionSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,6 +128,7 @@ class FollowUpItem(BaseModel):
 class FollowUpListResult(BaseModel):
     items: list[FollowUpItem]
     has_more: bool
+    total: int
 
 
 class HandoffRunSummary(BaseModel):

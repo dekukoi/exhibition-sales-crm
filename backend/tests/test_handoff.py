@@ -78,3 +78,15 @@ def test_every_role_output_is_labeled_simulated():
     assert outcome.preparer.simulated is True
     assert outcome.checker.simulated is True
     assert outcome.coordinator.simulated is True
+
+
+def test_checker_records_the_proposal_it_validated():
+    outcome = run_handoff_pipeline(_complete_brief())
+
+    assert outcome.checker.validated_proposal == outcome.preparer.proposed_next_step
+
+
+def test_checker_records_the_proposal_it_validated_even_when_incomplete():
+    outcome = run_handoff_pipeline(_complete_brief(requested_height_m=None))
+
+    assert outcome.checker.validated_proposal == outcome.preparer.proposed_next_step

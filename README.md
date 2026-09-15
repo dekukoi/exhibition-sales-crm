@@ -1,12 +1,8 @@
 # Exhibition sales CRM
 
-Read [the assignment](ASSIGNMENT.md) first.
+A CRM for a company that designs and builds exhibition stands: find an exhibitor or contact and see their opportunities and fair editions, update an opportunity and record a conversation, and schedule or find a follow-up. It also includes a handoff assistant that prepares and checks a brief for the technical team before an opportunity is passed over. See [the assignment](ASSIGNMENT.md) for the full brief.
 
-Create your own public Git repository for the work. If you received this starter as a ZIP, initialise Git in the extracted project and commit the starter before making changes. Submit by email using the required format in [What to send us](ASSIGNMENT.md#what-to-send-us).
-
-The starter runs PostgreSQL. Add your application services to `compose.yml` and put your code wherever suits your stack. The export is in `data/`; its [README](data/README.md) describes the files and field formats.
-
-Run `./dev.sh` to start and `docker compose down` to stop. `./reset.sh` removes the project's data. Once you've added the application, `./verify.sh` checks that it responds on port 3000. Until then, the HTTP check will fail. Run `./test.sh` to run the backend test suite against a throwaway, containerized database — no host Python or database required.
+Run `./dev.sh` to build and start everything via Docker Compose; the app is then at `http://localhost:3000`. `docker compose down` stops it, keeping data. `./reset.sh` stops and wipes the project's data — the next start re-imports the archive in `data/` (its [README](data/README.md) describes the files and field formats). `./verify.sh` checks the Compose config and that the app responds on port 3000. Run `./test.sh` to run the backend test suite against a throwaway, containerized database — no host Python or database required.
 
 ## Submission notes
 

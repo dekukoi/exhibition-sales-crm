@@ -12,7 +12,7 @@ initial migration, so the list scan stays index-backed as the archive grows.
 
 from typing import cast
 
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import ActivityLogEntry, Company, Opportunity
@@ -36,6 +36,15 @@ def _pending_query() -> Select[FollowUpRow]:
     )
 
 
+def _filtered_query(sales_rep: str | None, company: str | None) -> Select[FollowUpRow]:
+    stmt = _pending_query()
+    if sales_rep:
+        stmt = stmt.where(Company.sales_rep == sales_rep)
+    if company:
+        stmt = stmt.where(Company.company_name.ilike(f"%{company}%"))
+    return stmt
+
+
 def list_pending_follow_ups(
     session: Session,
     sales_rep: str | None = None,
@@ -43,12 +52,17 @@ def list_pending_follow_ups(
     limit: int = 50,
     offset: int = 0,
 ) -> list[FollowUpRow]:
-    stmt = _pending_query().order_by(ActivityLogEntry.follow_up_on.asc(), ActivityLogEntry.id.asc())
-    if sales_rep:
-        stmt = stmt.where(Company.sales_rep == sales_rep)
-    if company:
-        stmt = stmt.where(Company.company_name.ilike(f"%{company}%"))
+    stmt = _filtered_query(sales_rep, company).order_by(
+        ActivityLogEntry.follow_up_on.asc(), ActivityLogEntry.id.asc()
+    )
     return list(session.execute(stmt.limit(limit).offset(offset)).tuples())
+
+
+def count_pending_follow_ups(
+    session: Session, sales_rep: str | None = None, company: str | None = None
+) -> int:
+    stmt = select(func.count()).select_from(_filtered_query(sales_rep, company).subquery())
+    return session.scalar(stmt) or 0
 
 
 def list_sales_reps(session: Session) -> list[str]:

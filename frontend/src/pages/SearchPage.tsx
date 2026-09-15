@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { PaginationFooter } from "@/components/ui/pagination";
 import {
   Table,
   TableBody,
@@ -14,25 +15,36 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { searchCompanies, type CompanySearchResult } from "@/lib/api";
 
+const PAGE_SIZE = 15;
+
 export default function SearchPage() {
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
   const [results, setResults] = useState<CompanySearchResult[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    setPage(0);
+  }
 
   useEffect(() => {
     const trimmed = query.trim();
     if (!trimmed) {
       setResults([]);
+      setTotal(0);
       setError(null);
       return;
     }
 
     setLoading(true);
     const timeout = setTimeout(() => {
-      searchCompanies(trimmed)
-        .then((matches) => {
-          setResults(matches);
+      searchCompanies(trimmed, { limit: PAGE_SIZE, offset: page * PAGE_SIZE })
+        .then((result) => {
+          setResults(result.items);
+          setTotal(result.total);
           setError(null);
         })
         .catch((err: unknown) => {
@@ -42,15 +54,20 @@ export default function SearchPage() {
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [query]);
+  }, [query, page]);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Exhibition Sales CRM</h1>
-        <p className="text-sm text-muted-foreground">
-          Find an exhibitor or contact by name or code.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Exhibition Sales CRM</h1>
+          <p className="text-sm text-muted-foreground">
+            Find an exhibitor or contact by name or code.
+          </p>
+        </div>
+        <Link to="/follow-ups" className="shrink-0 text-sm text-muted-foreground hover:underline">
+          Follow-ups
+        </Link>
       </div>
 
       <div className="relative">
@@ -60,7 +77,7 @@ export default function SearchPage() {
           placeholder="Search company name, contact name, or code…"
           className="pl-9"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => handleQueryChange(e.target.value)}
         />
       </div>
 
@@ -73,9 +90,9 @@ export default function SearchPage() {
       {results.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Results</CardTitle>
+            <CardTitle>Results ({total})</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-4">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -111,6 +128,17 @@ export default function SearchPage() {
                 ))}
               </TableBody>
             </Table>
+
+            {total > PAGE_SIZE && (
+              <PaginationFooter
+                page={page}
+                pageSize={PAGE_SIZE}
+                itemCount={results.length}
+                total={total}
+                onPageChange={setPage}
+                disabled={loading}
+              />
+            )}
           </CardContent>
         </Card>
       )}

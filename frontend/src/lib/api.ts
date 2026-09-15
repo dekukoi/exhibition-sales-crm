@@ -16,6 +16,11 @@ export interface CompanySearchResult {
   matched_contact: ContactSummary | null;
 }
 
+export interface CompanySearchListResult {
+  items: CompanySearchResult[];
+  total: number;
+}
+
 export interface FairEditionSummary {
   id: number;
   fair_edition_code: string;
@@ -102,6 +107,7 @@ export interface FollowUpItem {
 export interface FollowUpListResult {
   items: FollowUpItem[];
   has_more: boolean;
+  total: number;
 }
 
 export interface HandoffPreparerOutput {
@@ -139,8 +145,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function searchCompanies(q: string): Promise<CompanySearchResult[]> {
-  return apiFetch(`/api/companies?q=${encodeURIComponent(q)}`);
+export function searchCompanies(
+  q: string,
+  params: { limit?: number; offset?: number } = {},
+): Promise<CompanySearchListResult> {
+  const query = new URLSearchParams({ q });
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.offset) query.set("offset", String(params.offset));
+  return apiFetch(`/api/companies?${query.toString()}`);
 }
 
 export function getCompany(id: number): Promise<CompanyDetail> {
@@ -192,11 +204,13 @@ export function triggerHandoffRun(opportunityId: number): Promise<HandoffRunSumm
 export function listFollowUps(params: {
   salesRep?: string;
   company?: string;
+  limit?: number;
   offset?: number;
 }): Promise<FollowUpListResult> {
   const query = new URLSearchParams();
   if (params.salesRep) query.set("sales_rep", params.salesRep);
   if (params.company) query.set("company", params.company);
+  if (params.limit) query.set("limit", String(params.limit));
   if (params.offset) query.set("offset", String(params.offset));
   return apiFetch(`/api/follow-ups?${query.toString()}`);
 }

@@ -2,47 +2,81 @@
 
 Company/contact name search relies on the pg_trgm GIN indexes created in the initial
 migration so ILIKE '%...%' stays index-backed at 100k-row scale (see docs/adr/0002).
+
+A company that matches by its own name/code always wins over one that only matches via
+a contact (so the result never highlights a contact match when the company itself named
+the hit) — computed as one UNION ALL of the two independently-indexed branches, deduped
+per company with `DISTINCT ON`, so LIMIT/OFFSET/COUNT stay correct and index-backed
+instead of merging two independently-limited Python lists (which can't paginate past
+page one without silently losing or duplicating rows).
 """
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Integer, cast, func, null, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import ActivityLogEntry, Company, Contact, Opportunity
 
 
 def search_companies(
-    session: Session, q: str, limit: int = 20
-) -> list[tuple[Company, Contact | None]]:
+    session: Session, q: str, limit: int = 15, offset: int = 0
+) -> tuple[list[tuple[Company, Contact | None]], int]:
+    """Returns (this page of (company, matched_contact) results, total distinct matches)."""
     q = q.strip()
     if not q:
-        return []
+        return [], 0
     pattern = f"%{q}%"
     prefix = f"{q}%"
 
-    name_or_code_matches = session.scalars(
-        select(Company)
-        .where(or_(Company.company_name.ilike(pattern), Company.company_code.ilike(prefix)))
-        .order_by(Company.company_name)
-        .limit(limit)
-    ).all()
-
     full_name = func.coalesce(Contact.first_name, "") + " " + func.coalesce(Contact.last_name, "")
-    contact_matches = session.execute(
-        select(Contact, Company)
-        .join(Company, Contact.company_id == Company.id)
-        .where(or_(Contact.contact_code.ilike(prefix), full_name.ilike(pattern)))
+
+    name_or_code_branch = select(
+        Company.id.label("company_id"), cast(null(), Integer).label("contact_id")
+    ).where(or_(Company.company_name.ilike(pattern), Company.company_code.ilike(prefix)))
+
+    contact_branch = select(
+        Contact.company_id.label("company_id"), Contact.id.label("contact_id")
+    ).where(or_(Contact.contact_code.ilike(prefix), full_name.ilike(pattern)))
+
+    matches = name_or_code_branch.union_all(contact_branch).subquery("matches")
+
+    deduped = (
+        select(matches.c.company_id, matches.c.contact_id)
+        .distinct(matches.c.company_id)
+        .order_by(matches.c.company_id, matches.c.contact_id.nulls_first())
+        .subquery("deduped")
+    )
+
+    total = session.scalar(select(func.count()).select_from(deduped)) or 0
+    if total == 0:
+        return [], 0
+
+    page = session.execute(
+        select(deduped.c.company_id, deduped.c.contact_id)
+        .join(Company, Company.id == deduped.c.company_id)
         .order_by(Company.company_name)
         .limit(limit)
+        .offset(offset)
     ).all()
+    if not page:
+        return [], total
 
-    results: dict[int, tuple[Company, Contact | None]] = {
-        company.id: (company, None) for company in name_or_code_matches
+    company_ids = [row.company_id for row in page]
+    contact_ids = [row.contact_id for row in page if row.contact_id is not None]
+
+    companies = {
+        c.id: c for c in session.scalars(select(Company).where(Company.id.in_(company_ids)))
     }
-    for contact, company in contact_matches:
-        if company.id not in results:
-            results[company.id] = (company, contact)
+    contacts = (
+        {c.id: c for c in session.scalars(select(Contact).where(Contact.id.in_(contact_ids)))}
+        if contact_ids
+        else {}
+    )
 
-    return list(results.values())[:limit]
+    results = [
+        (companies[row.company_id], contacts.get(row.contact_id) if row.contact_id else None)
+        for row in page
+    ]
+    return results, total
 
 
 def get_company_detail(session: Session, company_id: int) -> Company | None:

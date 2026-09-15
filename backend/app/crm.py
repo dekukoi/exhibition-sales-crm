@@ -2,16 +2,22 @@
 
 Company/contact name search relies on the pg_trgm GIN indexes created in the initial
 migration so ILIKE '%...%' stays index-backed at 100k-row scale (see docs/adr/0002).
+Each matchable column gets its own UNION ALL branch rather than combining columns with
+OR in one WHERE: Postgres won't use an index for one side of an OR predicate when the
+other side isn't indexable (company_code/contact_code ILIKE can't use their plain btree
+indexes, since ILIKE is case-insensitive) — confirmed via EXPLAIN ANALYZE, an OR'd
+`company_name ILIKE ... OR company_code ILIKE ...` forces a full sequential scan even
+though company_name alone is index-backed. Separate branches let each column use
+whatever index actually applies to it, independent of the others.
 
 A company that matches by its own name/code always wins over one that only matches via
 a contact (so the result never highlights a contact match when the company itself named
-the hit) — computed as one UNION ALL of the two independently-indexed branches, deduped
-per company with `DISTINCT ON`, so LIMIT/OFFSET/COUNT stay correct and index-backed
-instead of merging two independently-limited Python lists (which can't paginate past
-page one without silently losing or duplicating rows).
+the hit) — deduped per company with `DISTINCT ON` over the unioned branches, so
+LIMIT/OFFSET/COUNT stay correct instead of merging independently-limited Python lists
+(which can't paginate past page one without silently losing or duplicating rows).
 """
 
-from sqlalchemy import Integer, cast, func, null, or_, select
+from sqlalchemy import Integer, cast, func, null, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import ActivityLogEntry, Company, Contact, Opportunity
@@ -28,16 +34,24 @@ def search_companies(
     prefix = f"{q}%"
 
     full_name = func.coalesce(Contact.first_name, "") + " " + func.coalesce(Contact.last_name, "")
+    no_contact = cast(null(), Integer).label("contact_id")
 
-    name_or_code_branch = select(
-        Company.id.label("company_id"), cast(null(), Integer).label("contact_id")
-    ).where(or_(Company.company_name.ilike(pattern), Company.company_code.ilike(prefix)))
-
-    contact_branch = select(
+    by_company_name = select(Company.id.label("company_id"), no_contact).where(
+        Company.company_name.ilike(pattern)
+    )
+    by_company_code = select(Company.id.label("company_id"), no_contact).where(
+        Company.company_code.ilike(prefix)
+    )
+    by_contact_code = select(
         Contact.company_id.label("company_id"), Contact.id.label("contact_id")
-    ).where(or_(Contact.contact_code.ilike(prefix), full_name.ilike(pattern)))
+    ).where(Contact.contact_code.ilike(prefix))
+    by_contact_name = select(
+        Contact.company_id.label("company_id"), Contact.id.label("contact_id")
+    ).where(full_name.ilike(pattern))
 
-    matches = name_or_code_branch.union_all(contact_branch).subquery("matches")
+    matches = by_company_name.union_all(by_company_code, by_contact_code, by_contact_name).subquery(
+        "matches"
+    )
 
     deduped = (
         select(matches.c.company_id, matches.c.contact_id)

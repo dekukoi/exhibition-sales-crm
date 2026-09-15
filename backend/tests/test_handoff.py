@@ -52,7 +52,11 @@ def test_stop_when_requested_height_exceeds_edition_limit():
 
 def test_heads_up_when_budget_known_even_though_area_and_height_are_missing():
     outcome = run_handoff_pipeline(
-        _complete_brief(stand_area_sqm=None, requested_height_m=None, client_budget_eur=Decimal("50000.00"))
+        _complete_brief(
+            stand_area_sqm=None,
+            requested_height_m=None,
+            client_budget_eur=Decimal("50000.00"),
+        )
     )
 
     assert outcome.coordinator.verdict == "stop"

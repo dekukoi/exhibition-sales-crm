@@ -19,6 +19,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  ApiError,
   createActivity,
   getCompany,
   getCompanyActivity,
@@ -41,12 +42,33 @@ function money(value: string | null, unit: string): string {
   return `${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${unit}`;
 }
 
+const STATUS_BADGE_VARIANT: Record<string, "outline"> = {
+  lost: "outline",
+};
+
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  won: "border-transparent bg-emerald-100 text-emerald-800",
+  lost: "border-destructive text-destructive",
+};
+
+function BackToSearchLink() {
+  return (
+    <Link
+      to="/"
+      className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:underline"
+    >
+      <ArrowLeft className="h-4 w-4" /> Back to search
+    </Link>
+  );
+}
+
 export default function CompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const companyId = Number(id);
 
   const [company, setCompany] = useState<CompanyDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] = useState<OpportunitySummary | null>(
     null,
   );
@@ -56,12 +78,20 @@ export default function CompanyDetailPage() {
   useEffect(() => {
     setCompany(null);
     setSelectedOpportunity(null);
+    setError(null);
+    setNotFound(false);
     getCompany(companyId)
       .then((detail) => {
         setCompany(detail);
         setSelectedOpportunity(detail.opportunities[0] ?? null);
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load"));
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 404) {
+          setNotFound(true);
+        } else {
+          setError(err instanceof Error ? err.message : "Failed to load");
+        }
+      });
   }, [companyId]);
 
   useEffect(() => {
@@ -88,17 +118,27 @@ export default function CompanyDetailPage() {
     setActivityRefreshKey((key) => key + 1);
   }
 
-  if (error) return <p className="p-8 text-sm text-destructive">{error}</p>;
-  if (!company) return <p className="p-8 text-sm text-muted-foreground">Loading…</p>;
+  if (error || notFound) {
+    return (
+      <main className="mx-auto flex max-w-5xl flex-col gap-6 p-8">
+        <BackToSearchLink />
+        <Card>
+          <CardContent className="pt-6">
+            <p className={`text-sm ${notFound ? "text-muted-foreground" : "text-destructive"}`}>
+              {notFound
+                ? "Company not found. It may have been removed, or the link may be out of date."
+                : error}
+            </p>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+  if (!company) return <main className="p-8 text-sm text-muted-foreground">Loading…</main>;
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 p-8">
-      <Link
-        to="/"
-        className="flex w-fit items-center gap-1 text-sm text-muted-foreground hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to search
-      </Link>
+    <main className="mx-auto flex min-w-0 max-w-5xl flex-col gap-6 p-8">
+      <BackToSearchLink />
 
       <div>
         <h1 className="text-2xl font-semibold">{company.company_name}</h1>
@@ -108,7 +148,7 @@ export default function CompanyDetailPage() {
         </p>
       </div>
 
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Contacts</CardTitle>
         </CardHeader>
@@ -140,11 +180,11 @@ export default function CompanyDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle>Opportunities</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex min-w-0 flex-col gap-4">
           <Table>
             <TableHeader>
               <TableRow>
@@ -172,7 +212,16 @@ export default function CompanyDetailPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    {opp.status ? <Badge variant="secondary">{opp.status}</Badge> : "—"}
+                    {opp.status ? (
+                      <Badge
+                        variant={STATUS_BADGE_VARIANT[opp.status] ?? "secondary"}
+                        className={STATUS_BADGE_CLASSES[opp.status]}
+                      >
+                        {opp.status}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell>{money(opp.amount_eur, "€")}</TableCell>
                   <TableCell>{opp.opened_on ?? "—"}</TableCell>
@@ -228,7 +277,7 @@ export default function CompanyDetailPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }
 
@@ -254,11 +303,17 @@ function ActivityPanel({
   }, [tab, opportunity.id, companyId, refreshKey]);
 
   return (
-    <Tabs value={tab} onValueChange={(v) => setTab(v as "opportunity" | "company")}>
-      <TabsList>
-        <TabsTrigger value="opportunity">This opportunity's conversations</TabsTrigger>
-        <TabsTrigger value="company">Full company history</TabsTrigger>
-      </TabsList>
+    <Tabs
+      value={tab}
+      onValueChange={(v) => setTab(v as "opportunity" | "company")}
+      className="min-w-0"
+    >
+      <div className="w-full overflow-x-auto">
+        <TabsList>
+          <TabsTrigger value="opportunity">This opportunity's conversations</TabsTrigger>
+          <TabsTrigger value="company">Full company history</TabsTrigger>
+        </TabsList>
+      </div>
       <TabsContent value={tab}>
         {entries.length === 0 ? (
           <p className="py-4 text-sm text-muted-foreground">No activity recorded.</p>
@@ -387,7 +442,7 @@ function OpportunityEditForm({
       </CardHeader>
       <CardContent>
         <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Status">
               <Select value={fields.status} onChange={(e) => setField("status", e.target.value)}>
                 <option value="">—</option>
@@ -485,14 +540,20 @@ function LogActivityForm({
     setError(null);
   }, [opportunity.id]);
 
+  const trimmedDetails = details.trim();
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!trimmedDetails) {
+      setError("Add some details before logging this conversation.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       const payload: ActivityCreatePayload = {
         activity_type: activityType,
-        details: details.trim() || null,
+        details: trimmedDetails,
         follow_up_on: followUpOn || null,
       };
       await createActivity(opportunity.id, payload);
@@ -537,7 +598,7 @@ function LogActivityForm({
             <Input type="date" value={followUpOn} onChange={(e) => setFollowUpOn(e.target.value)} />
           </Field>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" size="sm" disabled={saving} className="w-fit">
+          <Button type="submit" size="sm" disabled={saving || !trimmedDetails} className="w-fit">
             {saving ? "Saving…" : "Add to activity log"}
           </Button>
         </form>
